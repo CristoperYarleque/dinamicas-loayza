@@ -5,7 +5,7 @@
   let { sorteoId, volver } = $props();
 
   const H = 96; // alto de cada fila del carrete (px)
-  const DURACION = 5500; // ms que gira el carrete
+  const DURACION = 8500; // ms que gira el carrete
 
   let cargando = $state(true);
   let error = $state('');
@@ -90,11 +90,45 @@
       girando = false;
       return;
     }
-
+    
     const final = { num: r.num, nombre: r.nombre };
-    const previo = ultimo ? { num: ultimo.num, nombre: ultimo.nombre } : azar(entradas);
-    const relleno = Array.from({ length: 55 }, () => azar(entradas));
-    carrete = [azar(entradas), previo, ...relleno, final, azar(entradas)];
+    const previo = ultimo
+      ? { num: ultimo.num, nombre: ultimo.nombre }
+      : { nombre: '🍀 ¿Quién será?', num: '' };
+    
+    // Relleno: solo participantes que siguen en juego, SIN el ganador
+    const base = entradas.filter((e) => e.num !== r.num);
+    if (!base.length) base.push({ nombre: '🍀', num: '' });
+
+    const barajar = (a) => {
+      const b = a.slice();
+      for (let i = b.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [b[i], b[j]] = [b[j], b[i]];
+      }
+      return b;
+    };
+
+    // 4 distintos para lo que se ve al arrancar y al frenar
+    const v = barajar(base);
+    const [A, p1, pN, B] = [v[0], v[1 % v.length], v[2 % v.length], v[3 % v.length]];
+
+    // Medio: se recorre una baraja entera antes de repetir y nunca queda igual al vecino
+    const medio = [];
+    let mazo = [];
+    for (let i = 0; i < 50; i++) {
+      if (!mazo.length) mazo = barajar(base);
+      const prev = medio.at(-1) ?? p1;
+      const k = mazo.length > 1 && mazo[0].num === prev.num ? 1 : 0;
+      medio.push(mazo.splice(k, 1)[0]);
+    }
+    if (base.length > 2 && medio.at(-1).num === pN.num) {
+      medio[medio.length - 1] = base.find(
+        (e) => e.num !== pN.num && e.num !== medio.at(-2).num
+      );
+    }
+
+    carrete = [A, previo, p1, ...medio, pN, final, B];
     anima = false;
     offset = 0;
     resaltado = '';
