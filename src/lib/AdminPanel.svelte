@@ -100,7 +100,7 @@
 
       <details>
         <summary class="campo">➕ Nueva campaña</summary>
-        <input bind:value={nueva} placeholder="Ej: Horno 15 oct" />
+        <input bind:value={nueva} placeholder="Ej: Dinamica 15 octubre" />
         <button class="btn" onclick={crear} disabled={nueva.trim().length < 3}>Crear campaña</button>
       </details>
     </section>
