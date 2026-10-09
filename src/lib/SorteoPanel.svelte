@@ -63,7 +63,7 @@
               <small>{ETIQ[s.tipo] ?? s.tipo} · {s.giros} {s.giros === 1 ? 'giro' : 'giros'}</small>
             </span>
             <span>
-              {s.ganador ? '🏆 ' + s.ganador : s.hechos ? `Giro ${s.hechos}/${s.giros}` : 'Por sortear ▶'}
+              {s.ganador ? '🏆 ' + s.ganador : s.hechos ? `Giro ${s.hechos}/${s.giros}` : 'Por jugar ▶'}
             </span>
           </button>
         {/each}

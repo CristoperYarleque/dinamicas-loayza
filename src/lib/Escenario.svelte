@@ -304,7 +304,7 @@
         <p class="grande">
           <strong>{entradas.length}</strong> {esNum ? 'números' : 'participantes'} en juego
         </p>
-        <p class="orden">{mezclada ? '🔀 Lista mezclada' : '📅 Orden de compra'}</p>
+        <p class="orden">{mezclada ? '🔀 Lista mezclada' : '📅 Orden de ingreso'}</p>
         <div class="herr">
           <input bind:value={busca} placeholder="🔍 Buscar nombre…" />
           <button onclick={mezclar} disabled={girando || revisando}>🔀 Mezclar</button>

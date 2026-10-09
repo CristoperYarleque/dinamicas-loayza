@@ -52,24 +52,24 @@
 </script>
 
 <svelte:head>
-  <title>Dinamicas Loayza | Verifica tus números</title>
+  <title>Dinámicas Loayza | Verifica tus números</title>
 </svelte:head>
 
-<header class="top">🍀 Dinamicas Loayza</header>
+<header class="top">🍀 Dinámicas Loayza</header>
 
 {#snippet campana(camp, k0, previa)}
   <div class="bloque" class:previa>
     <h3 class="titulo">{previa ? '📁' : '📣'} {camp.nombre}{previa ? ' · finalizada' : ''}</h3>
-    {#if camp.seguidor}<span class="badge oro">⭐ Anotado en el sorteo de seguidores</span>{/if}
+    {#if camp.seguidor}<span class="badge oro">⭐ Anotado en el premio de seguidores</span>{/if}
     {#if camp.totalNumeros > 0}
       <p class="total">
         {previa ? 'Participaste con' : 'Participando con'} <strong>{camp.totalNumeros}</strong> números
       </p>
       {#if !previa && camp.sorpresas > 0}
         <p class="nota">
-          🎁 Con tu compra pagada tienes 1 oportunidad
+          🎁 Con tu compra elegida tienes 1 oportunidad
           {camp.sorpresas === 1 ? 'en el premio sorpresa' : `en cada uno de los ${camp.sorpresas} premios sorpresa`}
-          de esta campaña.
+          de esta dinámica.
         </p>
       {/if}
     {/if}
@@ -78,13 +78,13 @@
       <div class="ticket" class:pendiente={c.estado === 'pendiente'}>
         <strong>🎟️ {c.combo === 'Individual' ? 'Números sueltos' : 'Combo ' + c.combo}</strong>
         <p>
-          Pagaste {c.pagados} · recibes <strong>{c.total} números</strong>
+          Elegiste {c.pagados} · recibes <strong>{c.total} números</strong>
           {#if regalo(c)}(incluye {regalo(c)} de regalo 🎁){/if}
         </p>
         <p class="suave">📅 {c.fecha}</p>
         {#if c.estado === 'pagado'}
           {#if previa}
-            <p class="suave">Campaña finalizada</p>
+            <p class="suave">Dinámica finalizada</p>
           {:else}
             <p class="ok">✅ Verificado y listo para la dinámica</p>
           {/if}
@@ -99,7 +99,7 @@
             </div>
           {/if}
         {:else}
-          <p class="pend">⏳ Pendiente de confirmar el pago</p>
+          <p class="pend">⏳ Pago pendiente de confirmar</p>
         {/if}
       </div>
     {/each}
@@ -139,11 +139,11 @@
           {@render campana(camp, `${i}-${a}`, false)}
         {/each}
         {#if !vig.length}
-          <p class="nota">No tienes participación en una campaña vigente.</p>
+          <p class="nota">No tienes participación en una dinámica vigente.</p>
         {/if}
         {#if ant.length}
           <button class="link" onclick={() => alternar(`ant-${i}`)}>
-            {abiertos[`ant-${i}`] ? 'Ocultar' : 'Ver'} campañas anteriores ({ant.length})
+            {abiertos[`ant-${i}`] ? 'Ocultar' : 'Ver'} dinámicas anteriores ({ant.length})
           </button>
           {#if abiertos[`ant-${i}`]}
             <div class="anteriores">
