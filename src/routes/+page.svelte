@@ -57,13 +57,21 @@
 
 <header class="top">🍀 Dinamicas Loayza</header>
 
-{#snippet campana(camp, k0)}
-  <div class="bloque">
-    <h3 class="titulo">📣 {camp.nombre}</h3>
+{#snippet campana(camp, k0, previa)}
+  <div class="bloque" class:previa>
+    <h3 class="titulo">{previa ? '📁' : '📣'} {camp.nombre}{previa ? ' · finalizada' : ''}</h3>
     {#if camp.seguidor}<span class="badge oro">⭐ Anotado en el sorteo de seguidores</span>{/if}
     {#if camp.totalNumeros > 0}
-      <p class="total"><strong>{camp.totalNumeros}</strong> números participando</p>
-      <p class="nota">🎁 Con tu compra pagada tienes 1 oportunidad en los premios sorpresa de esta campaña.</p>
+      <p class="total">
+        {previa ? 'Participaste con' : 'Participando con'} <strong>{camp.totalNumeros}</strong> números
+      </p>
+      {#if !previa && camp.sorpresas > 0}
+        <p class="nota">
+          🎁 Con tu compra pagada tienes 1 oportunidad
+          {camp.sorpresas === 1 ? 'en el premio sorpresa' : `en cada uno de los ${camp.sorpresas} premios sorpresa`}
+          de esta campaña.
+        </p>
+      {/if}
     {/if}
     {#each camp.compras as c, j}
       {@const k = `${k0}-${j}`}
@@ -75,7 +83,11 @@
         </p>
         <p class="suave">📅 {c.fecha}</p>
         {#if c.estado === 'pagado'}
-          <p class="ok">✅ Verificado y listo para el sorteo</p>
+          {#if previa}
+            <p class="suave">Campaña finalizada</p>
+          {:else}
+            <p class="ok">✅ Verificado y listo para la dinámica</p>
+          {/if}
           <p>Números: <strong>#{c.desde}</strong> al <strong>#{c.hasta}</strong></p>
           <button class="link" onclick={() => alternar(k)}>
             {abiertos[k] ? 'Ocultar números' : 'Ver mis números'}
@@ -97,7 +109,7 @@
 <main>
   <section class="hero">
     <h1>Verifica tus números de la suerte 🍀</h1>
-    <p>Escribe tu nombre tal como lo registraste</p>
+    <p>Escribe tu nombre tal como lo indicaste en facebook o whatsapp</p>
     <label class="buscador">
       <span>🔍</span>
       <input
@@ -115,7 +127,7 @@
 
   {#if resultados}
     {#if resultados.length === 0 && !cargando}
-      <p class="info">No encontramos ese nombre. Revisa cómo lo escribiste o escríbenos por Facebook.</p>
+      <p class="info">No encontramos ese nombre. Revisa cómo lo escribiste o escríbenos por facebook o whatsapp.</p>
     {/if}
 
     {#each resultados as p, i}
@@ -124,7 +136,7 @@
       <article class="persona">
         <h2>👤 {p.nombre}</h2>
         {#each vig as camp, a}
-          {@render campana(camp, `${i}-${a}`)}
+          {@render campana(camp, `${i}-${a}`, false)}
         {/each}
         {#if !vig.length}
           <p class="nota">No tienes participación en una campaña vigente.</p>
@@ -134,9 +146,11 @@
             {abiertos[`ant-${i}`] ? 'Ocultar' : 'Ver'} campañas anteriores ({ant.length})
           </button>
           {#if abiertos[`ant-${i}`]}
-            {#each ant as camp, a}
-              {@render campana(camp, `${i}-p${a}`)}
-            {/each}
+            <div class="anteriores">
+              {#each ant as camp, a}
+                {@render campana(camp, `${i}-p${a}`, true)}
+              {/each}
+            </div>
           {/if}
         {/if}
       </article>
@@ -229,4 +243,14 @@
   .sorteo ol { margin: 0; padding-left: 20px; }
   .sorteo li { margin: 4px 0; font-size: 0.93rem; }
   .sorteo li.ganador { font-weight: 700; color: var(--verde-osc); }
+  .anteriores {
+    margin-top: 10px; padding: 4px 12px 12px;
+    background: #eceee9; border-radius: 14px;
+  }
+  .bloque.previa { border-top-color: #d3d7cf; }
+  .bloque.previa .titulo { color: var(--suave); }
+  .bloque.previa .total { color: var(--suave); }
+  .bloque.previa .ticket { border: 2px dashed #b7bcb3; background: #f7f8f5; }
+  .bloque.previa .chips span { border-color: #b7bcb3; color: var(--suave); }
+  .bloque.previa .link { color: var(--suave); }
 </style>

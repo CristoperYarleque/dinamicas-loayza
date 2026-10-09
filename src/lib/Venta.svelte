@@ -14,8 +14,8 @@
 
   async function nombres() {
     try {
-      const v = await admin('ventas', { campana });
-      if (Array.isArray(v)) conocidos = [...new Set(v.map((x) => x.nombre))];
+      const v = await admin('nombres');
+      if (Array.isArray(v)) conocidos = v;
     } catch {}
   }
   onMount(nombres);

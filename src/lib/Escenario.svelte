@@ -1,11 +1,14 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { admin } from '#lib/api.js';
+  import * as son from '#lib/sonido.js';
 
   let { sorteoId, volver } = $props();
 
   const H = 96; // alto de cada fila del carrete (px)
-  const DURACION = 8500; // ms que gira el carrete
+  const DURACION = 9000; // duración máxima del giro (ms)
+  const FACTOR_FINAL = 1.4; // el giro final dura esto veces más (1 = igual)
+  const FILAS_POR_SEG = 13; // velocidad media: más alto = más filas, más vueltas a la lista
 
   let cargando = $state(true);
   let error = $state('');
@@ -15,11 +18,18 @@
   let carrete = $state([]);
   let offset = $state(0);
   let anima = $state(false);
+  let dur = $state(DURACION);
   let girando = $state(false);
+  let revisando = $state(false);
   let ultimo = $state(null);
   let resaltado = $state('');
+  let salidoNum = $state(null);
   let busca = $state('');
   let modo = $state('persona');
+  let mezclada = $state(false);
+  let listaEl = $state();
+  let carreteEl = $state();
+  let sonidoOn = $state(son.sonidoActivo());
 
   const esNum = $derived(sorteo?.tipo === 'NUMEROS');
   const terminado = $derived(log.some((l) => l.resultado === 'GANADOR'));
@@ -37,7 +47,6 @@
   });
 
   const vacio = { nombre: '', num: '' };
-  const azar = (a) => a[Math.floor(Math.random() * a.length)];
 
   async function cargar() {
     try {
@@ -70,12 +79,51 @@
       [a[i], a[j]] = [a[j], a[i]];
     }
     entradas = a;
+    mezclada = true;
+  }
+
+  function marcarEnLista(num) {
+    const el = listaEl?.querySelector(`[data-n="${num}"]`);
+    if (!el || !listaEl) return;
+    listaEl.scrollTo({
+      top: el.offsetTop - listaEl.clientHeight / 2 + el.clientHeight / 2,
+      behavior: 'smooth'
+    });
+  }
+
+  function seguirTicks() {
+    let ultimaFila = 0;
+    let ultimoTick = 0;
+    const paso = (t) => {
+      if (!girando || !carreteEl) return;
+      const y = new DOMMatrixReadOnly(getComputedStyle(carreteEl).transform).m42;
+      const fila = Math.floor(-y / H);
+      if (fila > ultimaFila && t - ultimoTick > 28) {
+        son.tick(t - ultimoTick > 150 ? 1.4 : 1);
+        ultimoTick = t;
+      }
+      ultimaFila = Math.max(ultimaFila, fila);
+      requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
+  }
+
+  function alternarSonido() {
+    sonidoOn = !sonidoOn;
+    son.setSonido(sonidoOn);
+    son.activar();
+    if (sonidoOn) son.golpe(); // prueba rápida
   }
 
   async function girar() {
-    if (girando || terminado || !entradas.length) return;
+    if (girando || revisando || terminado || !entradas.length) return;
+    son.activar(); // el clic habilita el audio del navegador
     girando = true;
     error = '';
+    salidoNum = null;
+    resaltado = '';
+    busca = '';
+    if (esNum) modo = 'numero'; // el orden real del carrete es el de la lista por número
     let r;
     try {
       // El servidor decide el resultado y lo registra; el carrete solo lo muestra
@@ -90,60 +138,55 @@
       girando = false;
       return;
     }
-    
-    const final = { num: r.num, nombre: r.nombre };
-    const previo = ultimo
-      ? { num: ultimo.num, nombre: ultimo.nombre }
-      : { nombre: '🍀 ¿Quién será?', num: '' };
-    
-    // Relleno: solo participantes que siguen en juego, SIN el ganador
-    const base = entradas.filter((e) => e.num !== r.num);
-    if (!base.length) base.push({ nombre: '🍀', num: '' });
 
-    const barajar = (a) => {
-      const b = a.slice();
-      for (let i = b.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [b[i], b[j]] = [b[j], b[i]];
-      }
-      return b;
-    };
-
-    // 4 distintos para lo que se ve al arrancar y al frenar
-    const v = barajar(base);
-    const [A, p1, pN, B] = [v[0], v[1 % v.length], v[2 % v.length], v[3 % v.length]];
-
-    // Medio: se recorre una baraja entera antes de repetir y nunca queda igual al vecino
-    const medio = [];
-    let mazo = [];
-    for (let i = 0; i < 50; i++) {
-      if (!mazo.length) mazo = barajar(base);
-      const prev = medio.at(-1) ?? p1;
-      const k = mazo.length > 1 && mazo[0].num === prev.num ? 1 : 0;
-      medio.push(mazo.splice(k, 1)[0]);
+    // El carrete recorre la lista EN SU ORDEN ACTUAL, da las vueltas que haga falta
+    // y frena en el ganador con los mismos vecinos que tiene en la lista
+    const lista = entradas.slice();
+    let w = lista.findIndex((e) => e.num === r.num);
+    if (w < 0) {
+      lista.push({ num: r.num, nombre: r.nombre });
+      w = lista.length - 1;
     }
-    if (base.length > 2 && medio.at(-1).num === pN.num) {
-      medio[medio.length - 1] = base.find(
-        (e) => e.num !== pN.num && e.num !== medio.at(-2).num
-      );
-    }
+    const n = lista.length;
+    dur = DURACION * (proximo === sorteo.giros ? FACTOR_FINAL : 1);
+    const L = Math.max(3, Math.round((dur / 1000) * FILAS_POR_SEG)); // filas hasta el ganador
+    const len = L + 2;
+    const mod = (a) => ((a % n) + n) % n;
+    carrete = Array.from({ length: len }, (_, k) => lista[mod(w - (len - 2) + k)]);
 
-    carrete = [A, previo, p1, ...medio, pN, final, B];
     anima = false;
     offset = 0;
-    resaltado = '';
     await tick();
     await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
     anima = true;
     offset = -(carrete.length - 3) * H;
-    await new Promise((ok) => setTimeout(ok, DURACION + 150));
+    son.arranque();
+    seguirTicks();
+    await new Promise((ok) => setTimeout(ok, dur + 150));
+
+    son.golpe(); // el carrete se clava
+    await new Promise((ok) => setTimeout(ok, 350)); // pausa de suspenso
 
     ultimo = { giro: r.giro, num: r.num, nombre: r.nombre, resultado: r.resultado };
     log = [...log, ultimo];
-    entradas = entradas.filter((e) => !(e.num === r.num && e.nombre === r.nombre));
-    resaltado = r.nombre;
+    salidoNum = r.num;
     girando = false;
-    if (r.resultado === 'GANADOR') festejar();
+    revisando = true;
+    if (r.resultado === 'GANADOR') {
+      son.ganador();
+      festejar();
+    } else {
+      son.agua();
+    }
+    await tick();
+    marcarEnLista(r.num);
+
+    // Se deja el ganador marcado en la lista un momento y luego sale
+    await new Promise((ok) => setTimeout(ok, 2200));
+    entradas = entradas.filter((e) => e.num !== r.num);
+    salidoNum = null;
+    resaltado = r.nombre;
+    revisando = false;
   }
 
   async function festejar() {
@@ -173,8 +216,11 @@
     <div class="rejilla">
       <section class="escenario">
         <div class="acciones">
-          <button class="top" onclick={volver} disabled={girando}>← Dinámicas</button>
-          <button class="top" onclick={pantalla}>⛶ Pantalla completa</button>
+          <button class="top" onclick={volver} disabled={girando || revisando}>← Dinámicas</button>
+          <span>
+            <button class="top" onclick={alternarSonido}>{sonidoOn ? '🔊' : '🔇'}</button>
+            <button class="top" onclick={pantalla}>⛶ Pantalla completa</button>
+          </span>
         </div>
 
         <h1 class="premio">{sorteo.premio}</h1>
@@ -190,7 +236,7 @@
         </div>
         <p class="giroTxt">
           {#if terminado}
-            Dinamica terminada
+            Dinámica terminada
           {:else if proximo === sorteo.giros}
             🔥 ¡Giro final! ({proximo} de {sorteo.giros})
           {:else}
@@ -208,7 +254,8 @@
           {#if !girando && ultimo?.resultado === 'AL AGUA'}<div class="equis">✖</div>{/if}
           <div
             class="carrete"
-            style="transform: translateY({offset}px); transition-duration: {anima ? DURACION : 0}ms"
+            bind:this={carreteEl}
+            style="transform: translateY({offset}px); transition-duration: {anima ? dur : 0}ms"
           >
             {#each carrete as c}
               <div class="item">
@@ -233,9 +280,9 @@
         {#if error}<p class="res agua">{error}</p>{/if}
 
         {#if terminado}
-          <button class="girar" onclick={volver}>← Volver a las dinámicas</button>
+          <button class="girar" onclick={volver} disabled={revisando}>← Volver a las dinámicas</button>
         {:else}
-          <button class="girar" onclick={girar} disabled={girando || !entradas.length}>
+          <button class="girar" onclick={girar} disabled={girando || revisando || !entradas.length}>
             {girando ? 'Girando…' : proximo === sorteo.giros ? '🎰 GIRO FINAL' : `🎰 Girar (giro ${proximo})`}
           </button>
         {/if}
@@ -244,7 +291,7 @@
           <ul class="historial">
             {#each log as l}
               <li>
-                Giro {l.giro}: {#if esNum}#{l.num} · {/if}{l.nombre} —
+                Giro {l.giro}: {#if esNum}#{l.num} ·&nbsp;{/if}{l.nombre} —
                 {l.resultado === 'GANADOR' ? '🏆 Ganador' : '💧 Al agua'}
               </li>
             {/each}
@@ -257,9 +304,10 @@
         <p class="grande">
           <strong>{entradas.length}</strong> {esNum ? 'números' : 'participantes'} en juego
         </p>
+        <p class="orden">{mezclada ? '🔀 Lista mezclada' : '📅 Orden de compra'}</p>
         <div class="herr">
           <input bind:value={busca} placeholder="🔍 Buscar nombre…" />
-          <button onclick={mezclar}>🔀 Mezclar</button>
+          <button onclick={mezclar} disabled={girando || revisando}>🔀 Mezclar</button>
         </div>
         {#if esNum}
           <div class="modo">
@@ -267,10 +315,14 @@
             <button class:act={modo === 'numero'} onclick={() => (modo = 'numero')}>Por número</button>
           </div>
         {/if}
-        <ul>
+        <ul bind:this={listaEl}>
           {#each filas as f (f.num ?? f.nombre)}
-            <li class:res={f.nombre === resaltado}>
-              <span>{#if esNum && f.num !== undefined}#{f.num} · {/if}{f.nombre}</span>
+            <li
+              data-n={f.num}
+              class:sale={f.num !== undefined && f.num === salidoNum}
+              class:res={f.nombre === resaltado}
+            >
+              <span>{#if esNum && f.num !== undefined}#{f.num} ·&nbsp;{/if}{f.nombre}</span>
               {#if f.n}<b>×{f.n}</b>{/if}
             </li>
           {/each}
@@ -296,7 +348,7 @@
     .rejilla { grid-template-columns: 30% 1fr; }
     .lista { order: 1; }
     .escenario { order: 2; }
-    .lista ul { max-height: calc(100vh - 300px) !important; }
+    .lista ul { max-height: calc(100vh - 330px) !important; }
   }
 
   .acciones { display: flex; justify-content: space-between; }
@@ -341,9 +393,10 @@
   }
   .item {
     height: var(--h); display: flex; align-items: center; justify-content: center;
-    gap: 14px; white-space: nowrap; font-weight: 800;
-    font-size: clamp(1.8rem, 5vw, 3.4rem);
+    gap: 14px; white-space: nowrap; font-weight: 800; padding: 0 14px;
+    font-size: clamp(1.5rem, 4.6vw, 3.2rem);
   }
+  .item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .item small { font-size: 0.45em; color: #7fa88a; font-weight: 600; }
 
   .ventana.agua {
@@ -385,8 +438,9 @@
 
   .lista { background: #0f1a12; border: 1px solid #1f3324; border-radius: 16px; padding: 14px; }
   .lista h2 { margin: 0 0 6px; font-size: 1.05rem; }
-  .grande { margin: 4px 0 10px; color: #cfe0cb; }
+  .grande { margin: 4px 0 2px; color: #cfe0cb; }
   .grande strong { font-size: 2rem; color: var(--oro); }
+  .orden { margin: 0 0 10px; color: #9fb09b; font-size: 0.9rem; }
   .herr { display: flex; gap: 8px; }
   .herr input {
     background: #0a0f0b; color: #f1f5ef; border-color: #2f4a35; padding: 9px 12px;
@@ -395,16 +449,22 @@
     background: #1c2b1f; color: #f1f5ef; border: 1px solid #2f4a35;
     border-radius: 10px; padding: 8px 12px; white-space: nowrap;
   }
+  .herr button:disabled { opacity: 0.5; }
   .modo { display: flex; gap: 6px; margin-top: 8px; }
   .modo button { flex: 1; }
   .modo button.act { background: var(--verde); border-color: var(--verde); }
   .lista ul {
-    list-style: none; padding: 0; margin: 10px 0 0; max-height: 50vh; overflow-y: auto;
+    list-style: none; padding: 0; margin: 10px 0 0; max-height: 50vh;
+    overflow-y: auto; position: relative;
   }
   .lista li {
     display: flex; justify-content: space-between; gap: 8px;
     padding: 8px 6px; border-bottom: 1px solid #1c2b1f; font-size: 1.05rem;
   }
   .lista li.res { background: rgba(245, 179, 1, 0.15); border-radius: 8px; }
+  .lista li.sale {
+    background: rgba(245, 179, 1, 0.4); outline: 2px solid var(--oro);
+    border-radius: 8px; font-weight: 700;
+  }
   .lista li b { color: var(--oro); }
 </style>

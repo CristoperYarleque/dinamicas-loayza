@@ -9,11 +9,18 @@
   let enviando = $state(false);
   let resp = $state(null);
   let lista = $state([]);
+  let conocidos = $state([]);
+
+  const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const nuevo = $derived(
+    nombre.trim().length >= 3 && !conocidos.some((c) => norm(c) === norm(nombre))
+  );
 
   async function cargar() {
     try {
-      const s = await admin('seguidores', { campana });
+      const [s, n] = await Promise.all([admin('seguidores', { campana }), admin('nombres')]);
       if (Array.isArray(s)) lista = s.slice().reverse();
+      if (Array.isArray(n)) conocidos = n;
     } catch {}
   }
   onMount(cargar);
@@ -45,9 +52,24 @@
 {:else}
   <form class="caja" onsubmit={enviar}>
     <label class="campo" for="s-nombre">Nombre del seguidor</label>
-    <input id="s-nombre" bind:value={nombre} placeholder="Nombre y apellido" autocomplete="off" />
+    <input
+      id="s-nombre" list="s-conocidos" bind:value={nombre}
+      placeholder="Nombre y apellido" autocomplete="off"
+    />
+    <datalist id="s-conocidos">
+      {#each conocidos as n}<option value={n}></option>{/each}
+    </datalist>
+    {#if nuevo}
+      <p class="stats">
+        ℹ️ Este nombre no está en ventas ni en seguidores. Si el cliente ya compró alguna vez,
+        elígelo de la lista para escribirlo exactamente igual.
+      </p>
+    {:else if nombre.trim().length >= 3}
+      <p class="stats">✅ Nombre ya registrado.</p>
+    {/if}
+
     <label class="campo" for="s-nota">Nota (opcional)</label>
-    <input id="s-nota" bind:value={nota} placeholder="Ej: like y comentario en el post" />
+    <input id="s-nota" bind:value={nota} placeholder="Ej: like y comentario en el post del horno" />
     <button class="btn" disabled={enviando || nombre.trim().length < 3}>
       {enviando ? 'Guardando…' : 'Anotar seguidor'}
     </button>
