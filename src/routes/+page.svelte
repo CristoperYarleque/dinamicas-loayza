@@ -55,7 +55,7 @@
   <title>Dinámicas Loayza | Verifica tus números</title>
 </svelte:head>
 
-<header class="top">🍀 Dinámicas Loayza probando</header>
+<header class="top">🍀 Dinámicas Loayza</header>
 
 {#snippet campana(camp, k0, previa)}
   <div class="bloque" class:previa>
