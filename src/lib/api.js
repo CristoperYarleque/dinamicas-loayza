@@ -1,4 +1,5 @@
 import { API } from './config.js';
+import { writable } from 'svelte/store';
 
 const K = 'bn_clave';
 
@@ -24,11 +25,16 @@ export function leerClave() {
   try { return sessionStorage.getItem(K) || localStorage.getItem(K) || ''; }
   catch { return ''; }
 }
+
+export const sesion = writable(!!leerClave());
+
 export function guardarClave(clave, recordar) {
   try { (recordar ? localStorage : sessionStorage).setItem(K, clave); } catch {}
+  sesion.set(true);
 }
 export function borrarClave() {
   try { sessionStorage.removeItem(K); localStorage.removeItem(K); } catch {}
+  sesion.set(false);
 }
 
 // Para las vistas de admin y sorteo (usa la clave que se escribe al entrar)

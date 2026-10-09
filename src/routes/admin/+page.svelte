@@ -8,6 +8,6 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<Acceso titulo="🔧 Administración">
+<Acceso titulo="🔧 Administración" actual="/admin">
   <AdminPanel />
 </Acceso>

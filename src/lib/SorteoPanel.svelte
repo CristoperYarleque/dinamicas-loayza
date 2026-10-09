@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { admin } from '#lib/api.js';
   import Escenario from './Escenario.svelte';
+  import MenuAdmin from './MenuAdmin.svelte';
 
   const ETIQ = {
     NUMEROS: '🏆 Principal',
@@ -46,6 +47,7 @@
 {#if abierto}
   <Escenario sorteoId={abierto} {volver} />
 {:else}
+  <MenuAdmin actual="/dinamica" />
   <main class="cont">
     {#if cargando}<p class="gris">Cargando…</p>{/if}
     {#if error}<div class="msg err">{error}</div>{/if}

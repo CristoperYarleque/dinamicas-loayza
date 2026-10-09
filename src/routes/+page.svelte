@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { publico } from '#lib/api.js';
+  import { publico, sesion, borrarClave } from '#lib/api.js';
+  import MenuAdmin from '#lib/MenuAdmin.svelte';
 
   let q = $state('');
   let cargando = $state(false);
@@ -76,7 +77,11 @@
   <title>Dinámicas Loayza | Verifica tus números</title>
 </svelte:head>
 
-<header class="top">🍀 Dinámicas Loayza</header>
+<header class="top" class:admin={$sesion}>
+  <span>🍀 Dinámicas Loayza</span>
+  {#if $sesion}<button class="salir" onclick={borrarClave}>Salir</button>{/if}
+</header>
+{#if $sesion}<MenuAdmin actual="/" />{/if}
 
 {#snippet campana(camp, k0, previa)}
   <div class="bloque" class:previa>
@@ -194,7 +199,7 @@
                 {#each s.log as l}
                   <li class:ganador={l.resultado === 'GANADOR'}>
                     Giro {l.giro}/{s.giros}:
-                    {#if s.tipo === 'NUMEROS'}#{l.num} · {/if}{l.nombre} —
+                    {#if s.tipo === 'NUMEROS'}#{l.num} ·&nbsp;{/if}{l.nombre} —
                     {l.resultado === 'GANADOR' ? '🏆 GANADOR' : '💧 Al agua'}
                   </li>
                 {/each}
@@ -215,6 +220,15 @@
     padding: 14px;
     font-weight: 700;
     letter-spacing: 0.3px;
+  }
+  .top.admin {
+    display: flex; justify-content: space-between; align-items: center;
+    text-align: left;
+  }
+  .salir {
+    background: transparent; color: white;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 8px; padding: 6px 12px;
   }
   main { max-width: 560px; margin: 0 auto; padding: 20px 16px 60px; }
   .hero { text-align: center; padding: 18px 0 10px; }

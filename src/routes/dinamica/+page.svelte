@@ -8,6 +8,6 @@
   <meta name="robots" content="noindex" />
 </svelte:head>
 
-<Acceso titulo="🎰 Dinámicas en vivo">
+<Acceso titulo="🎰 Dinámicas en vivo" menu={false}>
   <SorteoPanel />
 </Acceso>

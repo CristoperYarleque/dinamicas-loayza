@@ -1,14 +1,16 @@
 <script>
   import { onMount } from 'svelte';
   import { admin, guardarClave, leerClave, borrarClave } from '#lib/api.js';
+  import MenuAdmin from './MenuAdmin.svelte';
 
-  let { titulo = '', children } = $props();
+  let { titulo = '', actual = '', menu = true, children } = $props();
 
   let listo = $state(false);
   let clave = $state('');
   let recordar = $state(false);
   let error = $state('');
   let cargando = $state(false);
+  let verificando = $state(!!leerClave());
 
   async function validar() {
     try {
@@ -20,12 +22,17 @@
     }
   }
 
-  onMount(async () => {
-    if (!leerClave()) return;
-    const v = await validar();
-    if (v === 'ok') listo = true;
-    else if (v === 'mal') borrarClave();
-  });
+    onMount(async () => {
+      if (!leerClave()) {
+        verificando = false;
+        return;
+      }
+      const v = await validar();
+      if (v === 'ok') listo = true;
+      else if (v === 'mal') borrarClave();
+      else error = 'No pudimos conectar, intenta de nuevo';
+      verificando = false;
+    });
 
   async function entrar(e) {
     e.preventDefault();
@@ -55,7 +62,15 @@
     <span>{titulo}</span>
     <button onclick={salir}>Salir</button>
   </header>
+  {#if menu}<MenuAdmin {actual} />{/if}
   {@render children()}
+{:else if verificando}
+  <main class="cont">
+    <div class="caja">
+      <p>⏳ Verificando acceso…</p>
+      <p class="stats">Puede tardar unos segundos.</p>
+    </div>
+  </main>
 {:else}
   <main class="cont">
     <form class="caja" onsubmit={entrar}>
