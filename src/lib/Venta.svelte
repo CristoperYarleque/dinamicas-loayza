@@ -29,9 +29,12 @@
       const r = await admin('venta', { campana, nombre, combo, cantidad, estado });
       resp = r.error ? { error: r.error } : { ok: r };
       if (!r.error) {
+        // actualiza la lista de nombres localmente, sin pedirla otra vez al servidor
+        if (!conocidos.some((c) => c.toLowerCase() === r.nombre.toLowerCase())) {
+          conocidos = [...conocidos, r.nombre];
+        }
         nombre = '';
-        await nombres();
-        alCambiar();
+        alCambiar(); // sin await: no hace esperar al botón
       }
     } catch {
       resp = { error: 'Sin conexión. Revisa la pestaña Ventas antes de repetir, por si sí se guardó.' };

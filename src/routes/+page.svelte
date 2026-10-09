@@ -43,10 +43,31 @@
   const regalo = (c) => Math.max(0, c.total - c.pagados);
   const alternar = (k) => (abiertos[k] = !abiertos[k]);
 
+  const TIPOS = {
+    NUMEROS: { etiqueta: '🎯 Premio principal', orden: 1 },
+    PERSONAS: { etiqueta: '🎁 Premio compradores', orden: 2 },
+    SEGUIDORES: { etiqueta: '⭐ Premio seguidores', orden: 3 }
+  };
+  const tipoDe = (t) => TIPOS[t] ?? { etiqueta: '🏆 Premio', orden: 9 };
+
   onMount(async () => {
     try {
       const r = await publico('resultados');
-      oficial = (r.sorteos ?? []).filter((s) => s.log.length).reverse().slice(0, 10);
+      const recientes = (r.sorteos ?? []).filter((s) => s.log.length).reverse();
+
+      // Agrupa por campaña, conservando el orden (más reciente primero)
+      const grupos = new Map();
+      for (const s of recientes) {
+        if (!grupos.has(s.campana)) grupos.set(s.campana, []);
+        grupos.get(s.campana).push(s);
+      }
+
+      oficial = [...grupos]
+        .slice(0, 10) // 10 campañas, no 10 premios
+        .map(([campana, premios]) => ({
+          campana,
+          premios: premios.sort((a, b) => tipoDe(a.tipo).orden - tipoDe(b.tipo).orden)
+        }));
     } catch {}
   });
 </script>
@@ -160,18 +181,26 @@
   {#if oficial.length}
     <section class="oficial">
       <h2>📋 Registro oficial de dinámicas</h2>
-      {#each oficial as s}
+      {#each oficial as c}
         <div class="sorteo">
-          <h3>{s.premio} <small>{s.campana}</small></h3>
-          <ol>
-            {#each s.log as l}
-              <li class:ganador={l.resultado === 'GANADOR'}>
-                Giro {l.giro}/{s.giros}:
-                {#if s.tipo === 'NUMEROS'}#{l.num} · {/if}{l.nombre} —
-                {l.resultado === 'GANADOR' ? '🏆 GANADOR' : '💧 Al agua'}
-              </li>
-            {/each}
-          </ol>
+          <h3 class="camp">📣 {c.campana}</h3>
+          {#each c.premios as s}
+            <div class="premioBox">
+              <p class="premioTit">
+                <span class="tag tag-{s.tipo}">{tipoDe(s.tipo).etiqueta}</span>
+                <strong>{s.premio}</strong>
+              </p>
+              <ol>
+                {#each s.log as l}
+                  <li class:ganador={l.resultado === 'GANADOR'}>
+                    Giro {l.giro}/{s.giros}:
+                    {#if s.tipo === 'NUMEROS'}#{l.num} · {/if}{l.nombre} —
+                    {l.resultado === 'GANADOR' ? '🏆 GANADOR' : '💧 Al agua'}
+                  </li>
+                {/each}
+              </ol>
+            </div>
+          {/each}
         </div>
       {/each}
     </section>
@@ -238,8 +267,16 @@
     background: var(--tarjeta); border: 1px solid var(--borde);
     border-radius: 14px; padding: 12px 16px; margin-top: 12px;
   }
-  .sorteo h3 { margin: 0 0 6px; font-size: 1rem; }
-  .sorteo small { color: var(--suave); font-weight: 400; margin-left: 6px; }
+  .camp { margin: 0 0 4px; font-size: 1.05rem; color: var(--verde-osc); }
+  .premioBox { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--borde); }
+  .premioTit { margin: 0 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .tag {
+    display: inline-block; border-radius: 999px; padding: 3px 10px;
+    font-size: 0.78rem; font-weight: 700;
+    background: var(--verde-claro); color: var(--verde-osc);
+  }
+  .tag-PERSONAS { background: #e8eefc; color: #2a4a9a; }
+  .tag-SEGUIDORES { background: #fff4cc; color: #7a5a00; }
   .sorteo ol { margin: 0; padding-left: 20px; }
   .sorteo li { margin: 4px 0; font-size: 0.93rem; }
   .sorteo li.ganador { font-weight: 700; color: var(--verde-osc); }

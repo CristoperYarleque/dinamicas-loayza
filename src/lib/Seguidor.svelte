@@ -34,10 +34,11 @@
       const r = await admin('seguidor', { campana, nombre, nota });
       resp = r.error ? { error: r.error } : { ok: `✅ ${r.nombre} anotado` };
       if (!r.error) {
+        lista = [{ id: r.id, nombre: r.nombre, fecha: 'ahora' }, ...lista];
+        if (!conocidos.some((c) => norm(c) === norm(r.nombre))) conocidos = [...conocidos, r.nombre];
         nombre = '';
         nota = '';
-        await cargar();
-        alCambiar();
+        alCambiar(); // sin await
       }
     } catch {
       resp = { error: 'Sin conexión. Revisa la lista antes de repetir.' };

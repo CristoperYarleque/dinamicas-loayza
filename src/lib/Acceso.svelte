@@ -12,8 +12,8 @@
 
   async function validar() {
     try {
-      const r = await admin('campanas');
-      if (Array.isArray(r)) return 'ok';
+      const r = await admin('ping');
+      if (r?.ok) return 'ok';
       return r?.error === 'no autorizado' ? 'mal' : 'red';
     } catch {
       return 'red';

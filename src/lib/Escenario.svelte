@@ -9,6 +9,7 @@
   const DURACION = 9000; // duración máxima del giro (ms)
   const FACTOR_FINAL = 1.4; // el giro final dura esto veces más (1 = igual)
   const FILAS_POR_SEG = 13; // velocidad media: más alto = más filas, más vueltas a la lista
+  const ESPERA_AUTO = 4500; // tiempo antes de quitar de la lista en modo automático (ms)
 
   let cargando = $state(true);
   let error = $state('');
@@ -30,6 +31,8 @@
   let listaEl = $state();
   let carreteEl = $state();
   let sonidoOn = $state(son.sonidoActivo());
+  let autoQuitar = $state(true);
+  let pendiente = $state(null); // { num, nombre } esperando quitarse manualmente
 
   const esNum = $derived(sorteo?.tipo === 'NUMEROS');
   const terminado = $derived(log.some((l) => l.resultado === 'GANADOR'));
@@ -115,6 +118,16 @@
     if (sonidoOn) son.golpe(); // prueba rápida
   }
 
+  function quitarDeLista() {
+    if (!pendiente) return;
+    const { num, nombre } = pendiente;
+    entradas = entradas.filter((e) => e.num !== num);
+    salidoNum = null;
+    resaltado = nombre;
+    pendiente = null;
+    revisando = false;
+  }
+
   async function girar() {
     if (girando || revisando || terminado || !entradas.length) return;
     son.activar(); // el clic habilita el audio del navegador
@@ -181,12 +194,13 @@
     await tick();
     marcarEnLista(r.num);
 
-    // Se deja el ganador marcado en la lista un momento y luego sale
-    await new Promise((ok) => setTimeout(ok, 2200));
-    entradas = entradas.filter((e) => e.num !== r.num);
-    salidoNum = null;
-    resaltado = r.nombre;
-    revisando = false;
+    pendiente = { num: r.num, nombre: r.nombre };
+    if (autoQuitar) {
+      // Se deja marcado en la lista un momento y luego sale solo
+      await new Promise((ok) => setTimeout(ok, ESPERA_AUTO));
+      // si mientras tanto lo quitaron a mano, no hacer nada
+      if (pendiente?.num === r.num) quitarDeLista();
+    }
   }
 
   async function festejar() {
@@ -218,6 +232,7 @@
         <div class="acciones">
           <button class="top" onclick={volver} disabled={girando || revisando}>← Dinámicas</button>
           <span>
+            <button class="top" onclick={() => (autoQuitar = !autoQuitar)} disabled={girando || revisando} title="Define si el número que sale se quita de la lista solo o a mano">🗑️ Quitar: {autoQuitar ? 'Auto' : 'Manual'}</button>
             <button class="top" onclick={alternarSonido}>{sonidoOn ? '🔊' : '🔇'}</button>
             <button class="top" onclick={pantalla}>⛶ Pantalla completa</button>
           </span>
@@ -284,6 +299,12 @@
         {:else}
           <button class="girar" onclick={girar} disabled={girando || revisando || !entradas.length}>
             {girando ? 'Girando…' : proximo === sorteo.giros ? '🎰 GIRO FINAL' : `🎰 Girar (giro ${proximo})`}
+          </button>
+        {/if}
+
+        {#if !autoQuitar && pendiente}
+          <button class="quitar" onclick={quitarDeLista}>
+            🗑️ Quitar {esNum ? `#${pendiente.num} · ` : ''}{pendiente.nombre} de la lista
           </button>
         {/if}
 
@@ -430,6 +451,12 @@
     background: var(--oro); color: #1c1400; box-shadow: 0 6px 0 #a87a00;
   }
   .girar:disabled { opacity: 0.5; }
+  .quitar {
+    display: block; margin: 14px auto 0; padding: 8px 20px;
+    font-size: 0.95rem; font-weight: 700; border: 0; border-radius: 10px;
+    background: var(--rojo); color: #fff; box-shadow: 0 3px 0 #8f1f1f;
+  }
+  .quitar:active { transform: translateY(2px); box-shadow: 0 1px 0 #8f1f1f; }
   .historial {
     list-style: none; padding: 0; margin: 22px auto 0; max-width: 780px;
     color: #9fb09b; font-size: 0.95rem;
