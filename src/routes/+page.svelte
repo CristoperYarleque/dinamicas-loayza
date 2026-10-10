@@ -158,7 +158,7 @@
 
     {#each resultados as p, i}
       {@const vig = p.campanas.filter((c) => c.vigente)}
-      {@const ant = p.campanas.filter((c) => !c.vigente)}
+      {@const ant = p.campanas.filter((c) => !c.vigente).reverse().slice(0, 5)}
       <article class="persona">
         <h2>👤 {p.nombre}</h2>
         {#each vig as camp, a}
