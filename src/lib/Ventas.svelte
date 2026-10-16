@@ -1,12 +1,13 @@
 <script>
   import { onMount } from 'svelte';
-  import { admin } from '#lib/api.js';
+  import { adminGo } from '#lib/api.js';
 
-  let { campana, alCambiar } = $props();
+  let { campana, bloqueada = false, alCambiar } = $props();
 
   let lista = $state([]);
   let filtro = $state('');
   let msg = $state('');
+  let enviando = $state(false);
 
   const visibles = $derived(
     lista.filter((v) => v.nombre.toLowerCase().includes(filtro.trim().toLowerCase()))
@@ -14,20 +15,25 @@
 
   async function cargar() {
     try {
-      const v = await admin('ventas', { campana });
-      if (Array.isArray(v)) lista = v.slice().reverse();
-    } catch {
-      msg = 'Sin conexión';
+      const v = await adminGo(`/ventas?campanaId=${campana}`);
+      if (Array.isArray(v)) lista = v;
+    } catch (e) {
+      msg = e.message;
     }
   }
   onMount(cargar);
 
   async function estado(v, nuevo) {
+    if (enviando || bloqueada) return;
     if (nuevo === 'anulado' && !confirm(`¿Anular la venta de ${v.nombre}?`)) return;
-    const r = await admin('estadoVenta', { id: v.id, estado: nuevo });
-    msg = r.error ?? '';
-    await cargar();
-    alCambiar();
+    enviando = true;
+    msg = '';
+    try {
+      await adminGo(`/ventas/${v.id}/estado`, { method: 'PATCH', body: { estado: nuevo } });
+      await cargar();
+      await alCambiar();
+    } catch (e) { msg = e.message; }
+    finally { enviando = false; }
   }
 
   const ETI = { pagado: '✅ Pagado', pendiente: '⏳ Pendiente', anulado: '🚫 Anulado' };
@@ -36,6 +42,7 @@
 <section class="caja">
   <input bind:value={filtro} placeholder="🔍 Buscar por nombre…" />
   {#if msg}<div class="msg err">{msg}</div>{/if}
+  {#if bloqueada}<p class="stats">Los pagos están bloqueados porque ya comenzó un sorteo de compradores.</p>{/if}
   <p class="stats">{visibles.length} ventas</p>
   {#each visibles as v (v.id)}
     <div class="item">
@@ -48,10 +55,10 @@
       </div>
       <div>
         {#if v.estado !== 'pagado'}
-          <button class="chico" onclick={() => estado(v, 'pagado')}>Pagado</button>
+          <button disabled={enviando || bloqueada} class="chico" onclick={() => estado(v, 'pagado')}>Pagado</button>
         {/if}
         {#if v.estado !== 'anulado'}
-          <button class="chico rojo" onclick={() => estado(v, 'anulado')}>Anular</button>
+          <button disabled={enviando || bloqueada} class="chico rojo" onclick={() => estado(v, 'anulado')}>Anular</button>
         {/if}
       </div>
     </div>

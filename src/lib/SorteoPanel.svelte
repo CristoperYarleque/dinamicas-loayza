@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { admin } from '#lib/api.js';
+  import { adminGo } from '#lib/api.js';
   import Escenario from './Escenario.svelte';
   import MenuAdmin from './MenuAdmin.svelte';
 
@@ -18,21 +18,21 @@
   const grupos = $derived.by(() => {
     const m = new Map();
     for (const s of lista) {
-      if (!m.has(s.campanaNombre)) m.set(s.campanaNombre, []);
-      m.get(s.campanaNombre).push(s);
+      if (!m.has(s.campanaId)) m.set(s.campanaId, { nombre: s.campanaNombre, premios: [] });
+      m.get(s.campanaId).premios.push(s);
     }
-    return [...m].reverse();
+    return [...m].sort(([a], [b]) => b - a).map(([id, grupo]) => ({ id, ...grupo }));
   });
 
   async function cargar() {
     cargando = true;
     error = '';
     try {
-      const r = await admin('sorteos');
+      const r = await adminGo('/premios');
       if (Array.isArray(r)) lista = r;
       else error = r?.error ?? 'Error al cargar';
-    } catch {
-      error = 'Sin conexión';
+    } catch (e) {
+      error = e.message;
     }
     cargando = false;
   }
@@ -45,7 +45,7 @@
 </script>
 
 {#if abierto}
-  <Escenario sorteoId={abierto} {volver} />
+  {#key abierto}<Escenario sorteoId={abierto} {volver} />{/key}
 {:else}
   <MenuAdmin actual="/dinamica" />
   <main class="cont">
@@ -55,9 +55,9 @@
       <p class="gris">Aún no hay premios. Créalos en /admin → Premios.</p>
     {/if}
 
-    {#each grupos as [campana, premios]}
+    {#each grupos as { id, nombre, premios } (id)}
       <section class="caja">
-        <strong>{campana}</strong>
+        <strong>{nombre}</strong>
         {#each premios as s (s.id)}
           <button class="fila" onclick={() => (abierto = s.id)}>
             <span>

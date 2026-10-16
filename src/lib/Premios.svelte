@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { admin } from '#lib/api.js';
+  import { adminGo } from '#lib/api.js';
 
   let { campana } = $props();
 
@@ -19,10 +19,10 @@
 
   async function cargar() {
     try {
-      const s = await admin('sorteos');
-      if (Array.isArray(s)) lista = s.filter((x) => x.campana === campana);
-    } catch {
-      msg = 'Sin conexión';
+      const s = await adminGo(`/premios?campanaId=${campana}`);
+      if (Array.isArray(s)) lista = s;
+    } catch (e) {
+      msg = e.message;
     }
   }
   onMount(cargar);
@@ -35,21 +35,25 @@
     enviando = true;
     msg = '';
     try {
-      const r = await admin('premio', { campana, premio, tipo, giros });
-      msg = r.error ?? '';
-      if (!r.error) premio = '';
+      await adminGo('/premios', { method: 'POST', body: { campanaId: campana, premio, tipo, giros } });
+      premio = '';
       await cargar();
-    } catch {
-      msg = 'Sin conexión. Revisa la lista antes de repetir.';
+    } catch (e) {
+      msg = e.message;
     } finally {
       enviando = false;
     }
   }
 
   async function cambiar(s, n) {
-    const r = await admin('giros', { sorteo: s.id, n });
-    msg = r.error ?? '';
-    await cargar();
+    if (enviando) return;
+    enviando = true;
+    msg = '';
+    try {
+      await adminGo(`/premios/${s.id}/giros`, { method: 'PATCH', body: { giros: Number(n) } });
+      await cargar();
+    } catch (e) { msg = e.message; await cargar(); }
+    finally { enviando = false; }
   }
 </script>
 
@@ -89,7 +93,7 @@
           Giro {s.hechos}/{s.giros}
         {:else}
           <input
-            class="mini" type="number" min="1" max="20" value={s.giros}
+            disabled={enviando} class="mini" type="number" min="1" max="20" value={s.giros}
             onchange={(e) => cambiar(s, e.currentTarget.value)}
           /> giros
         {/if}

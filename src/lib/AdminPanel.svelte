@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { admin } from '#lib/api.js';
+  import { adminGo } from '#lib/api.js';
   import Venta from './Venta.svelte';
   import Seguidor from './Seguidor.svelte';
   import Premios from './Premios.svelte';
@@ -14,6 +14,7 @@
   let vista = $state('venta');
   let nueva = $state('');
   let aviso = $state('');
+  let enviando = $state(false);
 
   const actual = $derived(campanas.find((c) => c.id === sel) ?? null);
   const otraActiva = $derived(campanas.find((c) => c.estado === 'activa' && c.id !== sel) ?? null);
@@ -28,14 +29,15 @@
 
   async function cargar() {
     try {
-      const [cs, ks] = await Promise.all([admin('campanas'), admin('combos')]);
+      const [cs, ks] = await Promise.all([adminGo('/campanas'), adminGo('/combos')]);
       if (Array.isArray(cs)) campanas = cs;
       if (Array.isArray(ks)) combos = ks;
       if (!campanas.some((c) => c.id === sel)) {
         sel = (campanas.find((c) => c.estado === 'activa') ?? campanas.at(-1))?.id ?? '';
       }
-    } catch {
-      aviso = 'Sin conexión';
+      aviso = '';
+    } catch (e) {
+      aviso = e.message;
     } finally {
       cargando = false;
     }
@@ -43,28 +45,40 @@
   onMount(cargar);
 
   async function crear() {
+    if (enviando) return;
     if (nueva.trim().length < 3) return;
     const previa = campanas.find((c) => c.estado === 'activa');
     if (previa && !confirm(`Se cerrarán las ventas de "${previa.nombre}". ¿Continuar?`)) return;
-    const r = await admin('crearCampana', { nombre: nueva });
-    aviso = r.error ?? '';
-    if (!r.error) {
+    enviando = true;
+    try {
+      const r = await adminGo('/campanas', { method: 'POST', body: { nombre: nueva } });
       nueva = '';
       sel = r.id;
-    }
-    await cargar();
+      await cargar();
+    } catch (e) { aviso = e.message; }
+    finally { enviando = false; }
   }
 
   async function cerrar() {
+    if (enviando) return;
     if (!confirm(`¿Cerrar las ventas de "${actual.nombre}"? Ya no se podrán registrar ventas ni seguidores.`)) return;
-    await admin('estadoCampana', { id: actual.id, estado: 'cerrada' });
-    await cargar();
+    enviando = true;
+    try {
+      await adminGo(`/campanas/${actual.id}/estado`, { method: 'PATCH', body: { estado: 'cerrada' } });
+      await cargar();
+    } catch (e) { aviso = e.message; }
+    finally { enviando = false; }
   }
 
   async function reabrir() {
+    if (enviando) return;
     if (otraActiva && !confirm(`Se cerrarán las ventas de "${otraActiva.nombre}". ¿Continuar?`)) return;
-    await admin('estadoCampana', { id: actual.id, estado: 'activa' });
-    await cargar();
+    enviando = true;
+    try {
+      await adminGo(`/campanas/${actual.id}/estado`, { method: 'PATCH', body: { estado: 'activa' } });
+      await cargar();
+    } catch (e) { aviso = e.message; }
+    finally { enviando = false; }
   }
 </script>
 
@@ -92,16 +106,16 @@
           ⏳ {actual.pendientes} pendientes · ⭐ {actual.seguidores} seguidores
         </p>
         {#if actual.estado === 'activa'}
-          <button class="btn sec" onclick={cerrar}>🔒 Cerrar ventas</button>
+          <button class="btn sec" onclick={cerrar} disabled={enviando}>🔒 Cerrar ventas</button>
         {:else}
-          <button class="btn sec" onclick={reabrir}>🔓 Reabrir ventas</button>
+          <button class="btn sec" onclick={reabrir} disabled={enviando}>🔓 Reabrir ventas</button>
         {/if}
       {/if}
 
       <details>
         <summary class="campo">➕ Nueva campaña</summary>
         <input bind:value={nueva} placeholder="Ej: Dinamica 15 octubre" />
-        <button class="btn" onclick={crear} disabled={nueva.trim().length < 3}>Crear campaña</button>
+        <button class="btn" onclick={crear} disabled={enviando || nueva.trim().length < 3}>Crear campaña</button>
       </details>
     </section>
 
@@ -114,13 +128,13 @@
 
       {#key actual.id}
         {#if vista === 'venta'}
-          <Venta campana={actual.id} activa={actual.estado === 'activa'} {combos} alCambiar={cargar} />
+          <Venta campana={actual.id} activa={actual.estado === 'activa'} bloqueada={actual.comprasBloqueadas} {combos} alCambiar={cargar} />
         {:else if vista === 'seguidor'}
-          <Seguidor campana={actual.id} activa={actual.estado === 'activa'} alCambiar={cargar} />
+          <Seguidor campana={actual.id} activa={actual.estado === 'activa'} bloqueada={actual.seguidoresBloqueados} alCambiar={cargar} />
         {:else if vista === 'premios'}
           <Premios campana={actual.id} />
         {:else if vista === 'ventas'}
-          <Ventas campana={actual.id} alCambiar={cargar} />
+          <Ventas bloqueada={actual.comprasBloqueadas} campana={actual.id} alCambiar={cargar} />
         {:else}
           <Combos {combos} alCambiar={cargar} />
         {/if}

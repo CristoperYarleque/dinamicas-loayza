@@ -1,5 +1,5 @@
 <script>
-  import Acceso from '#lib/Acceso.svelte';
+  import Acceso from '#lib/AccesoAdmin.svelte';
   import AdminPanel from '#lib/AdminPanel.svelte';
 </script>
 

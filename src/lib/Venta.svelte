@@ -1,43 +1,32 @@
 <script>
-  import { onMount } from 'svelte';
-  import { admin } from '#lib/api.js';
+  import { adminGo } from '#lib/api.js';
+  import Participante from './Participante.svelte';
 
-  let { campana, activa, combos, alCambiar } = $props();
+  let { campana, activa, bloqueada = false, combos, alCambiar } = $props();
 
-  let nombre = $state('');
+  let participante = $state(null);
+  let selector = $state(0);
   let combo = $state('');
   let cantidad = $state(1);
   let estado = $state('pagado');
   let enviando = $state(false);
   let resp = $state(null);
-  let conocidos = $state([]);
-
-  async function nombres() {
-    try {
-      const v = await admin('nombres');
-      if (Array.isArray(v)) conocidos = v;
-    } catch {}
-  }
-  onMount(nombres);
-
   async function enviar(e) {
     e.preventDefault();
-    if (enviando) return;
+    if (enviando || !participante || !activa || bloqueada) return;
     enviando = true;
     resp = null;
     try {
-      const r = await admin('venta', { campana, nombre, combo, cantidad, estado });
-      resp = r.error ? { error: r.error } : { ok: r };
-      if (!r.error) {
-        // actualiza la lista de nombres localmente, sin pedirla otra vez al servidor
-        if (!conocidos.some((c) => c.toLowerCase() === r.nombre.toLowerCase())) {
-          conocidos = [...conocidos, r.nombre];
-        }
-        nombre = '';
-        alCambiar(); // sin await: no hace esperar al botón
-      }
-    } catch {
-      resp = { error: 'Sin conexión. Revisa la pestaña Ventas antes de repetir, por si sí se guardó.' };
+      const r = await adminGo('/ventas', { method: 'POST', body: {
+        campanaId: campana, participanteId: participante.id,
+        ...(combo ? { comboId: combo } : { cantidad }), estado
+      } });
+      resp = { ok: r };
+      participante = null;
+      selector++;
+      alCambiar(); // sin await: no hace esperar al botón
+    } catch (e) {
+      resp = { error: e.message };
     } finally {
       enviando = false;
     }
@@ -48,23 +37,19 @@
   <div class="msg err">
     Las ventas de esta campaña están cerradas. Usa "Reabrir ventas" arriba si necesitas registrar más.
   </div>
+{:else if bloqueada}
+  <div class="msg err">Este registro está bloqueado porque ya comenzó un sorteo de este grupo.</div>
 {:else}
   <form class="caja" onsubmit={enviar}>
-    <label class="campo" for="v-nombre">Nombre del cliente</label>
-    <input
-      id="v-nombre" list="v-conocidos" bind:value={nombre}
-      placeholder="Nombre y apellido" autocomplete="off"
-    />
-    <datalist id="v-conocidos">
-      {#each conocidos as n}<option value={n}></option>{/each}
-    </datalist>
-    <p class="stats">Si ya compró antes, elige su nombre de la lista para escribirlo igual.</p>
+    {#key selector}
+      <Participante id="v-nombre" etiqueta="Nombre del cliente" bind:value={participante} disabled={enviando} />
+    {/key}
 
     <label class="campo" for="v-combo">¿Qué compró?</label>
     <select id="v-combo" bind:value={combo}>
       <option value="">Números sueltos</option>
       {#each combos as k}
-        <option value={k.nombre}>Combo {k.nombre} (paga {k.pagados}, recibe {k.total})</option>
+        <option value={k.id}>Combo {k.nombre} (paga {k.pagados}, recibe {k.total})</option>
       {/each}
     </select>
 
@@ -79,7 +64,7 @@
       <option value="pendiente">⏳ Pendiente</option>
     </select>
 
-    <button class="btn" disabled={enviando || nombre.trim().length < 3}>
+    <button class="btn" disabled={enviando || !participante}>
       {enviando ? 'Guardando…' : 'Registrar venta'}
     </button>
   </form>

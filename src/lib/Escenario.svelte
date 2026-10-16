@@ -1,6 +1,6 @@
 <script>
-  import { onMount, tick } from 'svelte';
-  import { admin } from '#lib/api.js';
+  import { onMount, onDestroy, tick } from 'svelte';
+  import { adminGo } from '#lib/api.js';
   import * as son from '#lib/sonido.js';
 
   let { sorteoId, volver } = $props();
@@ -23,7 +23,7 @@
   let girando = $state(false);
   let revisando = $state(false);
   let ultimo = $state(null);
-  let resaltado = $state('');
+  let resaltado = $state(null);
   let salidoNum = $state(null);
   let busca = $state('');
   let modo = $state('persona');
@@ -32,7 +32,12 @@
   let carreteEl = $state();
   let sonidoOn = $state(son.sonidoActivo());
   let autoQuitar = $state(true);
-  let pendiente = $state(null); // { num, nombre } esperando quitarse manualmente
+  let pendiente = $state(null); // Resultado guardado, pendiente de quitar visualmente
+  let giroPendiente = $state(null); // Se conserva si se pierde la respuesta
+  let confirmado = null;
+  let destruido = false;
+  let autoTimer;
+  let ticksFrame;
 
   const esNum = $derived(sorteo?.tipo === 'NUMEROS');
   const terminado = $derived(log.some((l) => l.resultado === 'GANADOR'));
@@ -43,37 +48,62 @@
     const base = q ? entradas.filter((e) => e.nombre.toLowerCase().includes(q)) : entradas;
     if (esNum && modo === 'persona') {
       const m = new Map();
-      for (const e of base) m.set(e.nombre, (m.get(e.nombre) ?? 0) + 1);
-      return [...m].map(([nombre, n]) => ({ nombre, n }));
+      for (const e of base) {
+        const fila = m.get(e.participanteId) ?? { nombre: e.nombre, participanteId: e.participanteId, n: 0 };
+        fila.n++;
+        m.set(e.participanteId, fila);
+      }
+      return [...m.values()];
     }
-    return base.map((e) => ({ nombre: e.nombre, num: e.num }));
+    return base.map((e) => ({ nombre: e.nombre, num: e.num, participanteId: e.participanteId }));
   });
 
   const vacio = { nombre: '', num: '' };
 
-  async function cargar() {
-    try {
-      const r = await admin('lista', { sorteo: sorteoId });
-      if (r.error) {
-        error = r.error;
-        return;
-      }
-      sorteo = r.sorteo;
-      entradas = r.entradas;
-      log = r.log;
-      ultimo = r.log.at(-1) ?? null;
-      carrete = [
-        vacio,
-        ultimo ? { num: ultimo.num, nombre: ultimo.nombre } : { nombre: '🍀 ¿Quién será?', num: '' },
-        vacio
-      ];
-    } catch {
-      error = 'Sin conexión';
-    } finally {
-      cargando = false;
+  const ruta = () => `/dinamicas/${sorteoId}`;
+
+  async function consultar() {
+    const datos = await adminGo(ruta());
+    if (!datos?.sorteo || !Array.isArray(datos.entradas) || !Array.isArray(datos.log)) {
+      throw new Error('Respuesta de dinámica inválida');
     }
+    return datos;
+  }
+
+  function mostrar(datos) {
+    sorteo = datos.sorteo;
+    entradas = datos.entradas;
+    log = datos.log;
+    ultimo = log.at(-1) ?? null;
+    carrete = [vacio, ultimo ?? { nombre: '🍀 ¿Quién será?', num: '' }, vacio];
+    anima = false;
+    offset = 0;
+    pendiente = null;
+    confirmado = null;
+    giroPendiente = null;
+    salidoNum = null;
+    resaltado = null;
+    revisando = false;
+    mezclada = false;
+  }
+
+  async function cargar() {
+    if (girando || revisando) return;
+    cargando = true;
+    error = '';
+    try {
+      const datos = await consultar();
+      if (!destruido) mostrar(datos);
+    } catch (e) { if (!destruido) error = e.message; }
+    finally { if (!destruido) cargando = false; }
   }
   onMount(cargar);
+  onDestroy(() => {
+    destruido = true;
+    girando = false;
+    clearTimeout(autoTimer);
+    cancelAnimationFrame(ticksFrame);
+  });
 
   function mezclar() {
     const a = entradas.slice();
@@ -98,7 +128,7 @@
     let ultimaFila = 0;
     let ultimoTick = 0;
     const paso = (t) => {
-      if (!girando || !carreteEl) return;
+      if (destruido || !girando || !carreteEl) return;
       const y = new DOMMatrixReadOnly(getComputedStyle(carreteEl).transform).m42;
       const fila = Math.floor(-y / H);
       if (fila > ultimaFila && t - ultimoTick > 28) {
@@ -106,9 +136,9 @@
         ultimoTick = t;
       }
       ultimaFila = Math.max(ultimaFila, fila);
-      requestAnimationFrame(paso);
+      ticksFrame = requestAnimationFrame(paso);
     };
-    requestAnimationFrame(paso);
+    ticksFrame = requestAnimationFrame(paso);
   }
 
   function alternarSonido() {
@@ -119,95 +149,133 @@
   }
 
   function quitarDeLista() {
-    if (!pendiente) return;
-    const { num, nombre } = pendiente;
-    entradas = entradas.filter((e) => e.num !== num);
+    if (!pendiente || !confirmado) return;
+    // La exclusión ya fue guardada por Go; este botón solo cambia la presentación.
+    const disponibles = new Set(confirmado.entradas.map((e) => e.num));
+    entradas = entradas.filter((e) => disponibles.has(e.num));
     salidoNum = null;
-    resaltado = nombre;
+    resaltado = pendiente.participanteId;
     pendiente = null;
+    confirmado = null;
     revisando = false;
+    clearTimeout(autoTimer);
   }
 
   async function girar() {
-    if (girando || revisando || terminado || !entradas.length) return;
-    son.activar(); // el clic habilita el audio del navegador
+    if (girando || revisando || terminado || (!entradas.length && !giroPendiente)) return;
+    son.activar();
     girando = true;
     error = '';
     salidoNum = null;
-    resaltado = '';
+    resaltado = null;
     busca = '';
-    if (esNum) modo = 'numero'; // el orden real del carrete es el de la lista por número
-    let r;
+    if (esNum) modo = 'numero';
+    const esperado = giroPendiente ?? proximo;
+    giroPendiente = esperado;
+    let datos;
+    let verificado = false;
     try {
-      // El servidor decide el resultado y lo registra; el carrete solo lo muestra
-      r = await admin('girar', { sorteo: sorteoId });
-    } catch {
-      error = 'Sin conexión. Revisa el registro antes de repetir.';
+      // Un reintento pide el MISMO giro, incluso si el primero se guardó sin respuesta.
+      const r = await adminGo(ruta() + '/giros', {
+        method: 'POST', body: { giroEsperado: esperado }
+      });
+      if (destruido) return;
+      if (r?.giro !== esperado || !Number.isInteger(r.num) || !Number.isInteger(r.participanteId)) {
+        throw new Error('Respuesta de giro inválida');
+      }
+      datos = await consultar();
+      if (destruido) return;
+      const guardado = datos.log.find((l) => l.giro === esperado);
+      if (!guardado || guardado.num !== r.num || guardado.participanteId !== r.participanteId || guardado.resultado !== r.resultado) {
+        throw new Error('No se pudo confirmar el giro en el registro');
+      }
+      verificado = true;
+      if (datos.log.length > esperado) {
+        mostrar(datos);
+        error = 'La dinámica avanzó desde otra ventana. Se actualizó el registro.';
+        return;
+      }
+
+      sorteo = datos.sorteo;
+      log = datos.log.filter((l) => l.giro < esperado);
+      // Actualiza el grupo disponible y conserva el orden visual de Mezclar.
+      // El resultado se mantiene visible hasta quitarlo de la lista.
+      const vigentes = new Map(datos.entradas.map((e) => [e.num, e]));
+      vigentes.set(r.num, { num: r.num, nombre: r.nombre, participanteId: r.participanteId });
+      const lista = [];
+      for (const e of entradas) {
+        if (vigentes.has(e.num)) {
+          lista.push(vigentes.get(e.num));
+          vigentes.delete(e.num);
+        }
+      }
+      lista.push(...vigentes.values());
+      entradas = lista;
+      const w = lista.findIndex((e) => e.num === r.num);
+      const n = lista.length;
+      dur = DURACION * (r.resultado === 'GANADOR' ? FACTOR_FINAL : 1);
+      const L = Math.max(3, Math.round((dur / 1000) * FILAS_POR_SEG));
+      const len = L + 2;
+      const mod = (a) => ((a % n) + n) % n;
+      carrete = Array.from({ length: len }, (_, k) => lista[mod(w - (len - 2) + k)]);
+
+      anima = false;
+      offset = 0;
+      await tick();
+      if (destruido) return;
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+      if (destruido) return;
+      anima = true;
+      offset = -(carrete.length - 3) * H;
+      son.arranque();
+      seguirTicks();
+      await new Promise((ok) => setTimeout(ok, dur + 150));
+      if (destruido) return;
+      son.golpe();
+      await new Promise((ok) => setTimeout(ok, 350));
+      if (destruido) return;
+
+      ultimo = guardado;
+      log = datos.log;
+      giroPendiente = null;
+      salidoNum = r.num;
       girando = false;
-      return;
-    }
-    if (r.error) {
-      error = r.error;
-      girando = false;
-      return;
-    }
-
-    // El carrete recorre la lista EN SU ORDEN ACTUAL, da las vueltas que haga falta
-    // y frena en el ganador con los mismos vecinos que tiene en la lista
-    const lista = entradas.slice();
-    let w = lista.findIndex((e) => e.num === r.num);
-    if (w < 0) {
-      lista.push({ num: r.num, nombre: r.nombre });
-      w = lista.length - 1;
-    }
-    const n = lista.length;
-    dur = DURACION * (proximo === sorteo.giros ? FACTOR_FINAL : 1);
-    const L = Math.max(3, Math.round((dur / 1000) * FILAS_POR_SEG)); // filas hasta el ganador
-    const len = L + 2;
-    const mod = (a) => ((a % n) + n) % n;
-    carrete = Array.from({ length: len }, (_, k) => lista[mod(w - (len - 2) + k)]);
-
-    anima = false;
-    offset = 0;
-    await tick();
-    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
-    anima = true;
-    offset = -(carrete.length - 3) * H;
-    son.arranque();
-    seguirTicks();
-    await new Promise((ok) => setTimeout(ok, dur + 150));
-
-    son.golpe(); // el carrete se clava
-    await new Promise((ok) => setTimeout(ok, 350)); // pausa de suspenso
-
-    ultimo = { giro: r.giro, num: r.num, nombre: r.nombre, resultado: r.resultado };
-    log = [...log, ultimo];
-    salidoNum = r.num;
-    girando = false;
-    revisando = true;
-    if (r.resultado === 'GANADOR') {
-      son.ganador();
-      festejar();
-    } else {
-      son.agua();
-    }
-    await tick();
-    marcarEnLista(r.num);
-
-    pendiente = { num: r.num, nombre: r.nombre };
-    if (autoQuitar) {
-      // Se deja marcado en la lista un momento y luego sale solo
-      await new Promise((ok) => setTimeout(ok, ESPERA_AUTO));
-      // si mientras tanto lo quitaron a mano, no hacer nada
-      if (pendiente?.num === r.num) quitarDeLista();
+      revisando = true;
+      confirmado = datos;
+      pendiente = guardado;
+      if (r.resultado === 'GANADOR') {
+        son.ganador();
+        void festejar().catch(() => {});
+      } else { son.agua(); }
+      await tick();
+      if (destruido) return;
+      marcarEnLista(r.num);
+      if (autoQuitar) {
+        autoTimer = setTimeout(() => {
+          if (!destruido && pendiente?.giro === esperado) quitarDeLista();
+        }, ESPERA_AUTO);
+      }
+    } catch (e) {
+      if (destruido) return;
+      if (verificado) {
+        mostrar(datos);
+        error = 'El giro ya está guardado. Se recuperó el registro sin repetirlo.';
+      } else {
+        error = `${e.message}. Puedes actualizar el registro o reintentar el giro ${esperado}; el reintento no crea otro giro.`;
+      }
+    } finally {
+      if (!destruido) girando = false;
+      cancelAnimationFrame(ticksFrame);
     }
   }
 
   async function festejar() {
     const { default: confetti } = await import('canvas-confetti');
+    if (destruido) return;
     confetti({ particleCount: 180, spread: 100, origin: { y: 0.6 } });
     const fin = Date.now() + 3500;
     (function lluvia() {
+      if (destruido) return;
       confetti({ particleCount: 6, angle: 60, spread: 70, origin: { x: 0 } });
       confetti({ particleCount: 6, angle: 120, spread: 70, origin: { x: 1 } });
       if (Date.now() < fin) requestAnimationFrame(lluvia);
@@ -285,20 +353,23 @@
           {#if ultimo.resultado === 'AL AGUA'}
             <p class="res agua">
               💧 ¡AL AGUA!
-              {#if esNum}Ese número sale del juego. Si tiene más, sigue participando…{:else}Queda fuera de esta dinámica.{/if}
+              {#if esNum}Ese número sale del juego. Si tiene más, sigue participando…{:else}Queda fuera de los premios de este tipo en esta campaña.{/if}
             </p>
           {:else}
             <p class="res gana">🏆 ¡GANADOR! {ultimo.nombre}</p>
           {/if}
         {/if}
 
-        {#if error}<p class="res agua">{error}</p>{/if}
+        {#if error}
+          <p class="res agua">{error}</p>
+          <button class="top" onclick={cargar} disabled={girando || revisando}>Actualizar registro</button>
+        {/if}
 
         {#if terminado}
           <button class="girar" onclick={volver} disabled={revisando}>← Volver a las dinámicas</button>
         {:else}
-          <button class="girar" onclick={girar} disabled={girando || revisando || !entradas.length}>
-            {girando ? 'Girando…' : proximo === sorteo.giros ? '🎰 GIRO FINAL' : `🎰 Girar (giro ${proximo})`}
+          <button class="girar" onclick={girar} disabled={girando || revisando || (!entradas.length && !giroPendiente)}>
+            {girando ? 'Girando…' : giroPendiente ? `Reintentar giro ${giroPendiente}` : proximo === sorteo.giros ? '🎰 GIRO FINAL' : `🎰 Girar (giro ${proximo})`}
           </button>
         {/if}
 
@@ -337,11 +408,11 @@
           </div>
         {/if}
         <ul bind:this={listaEl}>
-          {#each filas as f (f.num ?? f.nombre)}
+          {#each filas as f (f.num ?? f.participanteId)}
             <li
               data-n={f.num}
               class:sale={f.num !== undefined && f.num === salidoNum}
-              class:res={f.nombre === resaltado}
+              class:res={f.participanteId === resaltado}
             >
               <span>{#if esNum && f.num !== undefined}#{f.num} ·&nbsp;{/if}{f.nombre}</span>
               {#if f.n}<b>×{f.n}</b>{/if}

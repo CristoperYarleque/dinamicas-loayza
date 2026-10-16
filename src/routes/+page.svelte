@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy  } from 'svelte';
   import { publico, sesion, borrarClave } from '#lib/api.js';
   import MenuAdmin from '#lib/MenuAdmin.svelte';
 
@@ -12,15 +12,39 @@
   let timer;
   let ultimo = 0;
 
+  const formatoFecha = new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  });
+
+  function fechaPublica(valor) {
+    if (!valor) return '';
+
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return valor;
+
+    const partes = Object.fromEntries(
+      formatoFecha.formatToParts(fecha).map((p) => [p.type, p.value])
+    );
+
+    return `${partes.day} ${partes.month.replace(/\.$/, '')} - ${partes.hour}:${partes.minute}`;
+  }
+
   function alEscribir() {
     clearTimeout(timer);
+    ultimo++;
     error = '';
+
     if (q.trim().length < 3) {
-      ultimo++;
       resultados = null;
       cargando = false;
       return;
     }
+
     timer = setTimeout(buscar, 400);
   }
 
@@ -54,22 +78,29 @@
   onMount(async () => {
     try {
       const r = await publico('resultados');
-      const recientes = (r.sorteos ?? []).filter((s) => s.log.length).reverse();
+      const recientes = (r.sorteos ?? []).filter((s) => s.log.length);
 
       // Agrupa por campaña, conservando el orden (más reciente primero)
       const grupos = new Map();
       for (const s of recientes) {
-        if (!grupos.has(s.campana)) grupos.set(s.campana, []);
-        grupos.get(s.campana).push(s);
+        if (!grupos.has(s.campanaId)) {
+          grupos.set(s.campanaId, { id: s.campanaId, campana: s.campana, premios: [] });
+        }
+        grupos.get(s.campanaId).premios.push(s);
       }
 
-      oficial = [...grupos]
+      oficial = [...grupos.values()]
         .slice(0, 10) // 10 campañas, no 10 premios
-        .map(([campana, premios]) => ({
-          campana,
-          premios: premios.sort((a, b) => tipoDe(a.tipo).orden - tipoDe(b.tipo).orden)
+        .map((grupo) => ({
+          ...grupo,
+          premios: grupo.premios.sort((a, b) => tipoDe(a.tipo).orden - tipoDe(b.tipo).orden)
         }));
     } catch {}
+  });
+
+  onDestroy(() => {
+    clearTimeout(timer);
+    ultimo++;
   });
 </script>
 
@@ -93,9 +124,10 @@
       </p>
       {#if !previa && camp.sorpresas > 0}
         <p class="nota">
-          🎁 Con tu compra elegida tienes 1 oportunidad
-          {camp.sorpresas === 1 ? 'en el premio sorpresa' : `en cada uno de los ${camp.sorpresas} premios sorpresa`}
-          de esta dinámica.
+          🎁 Participas una vez como comprador en
+          {camp.sorpresas === 1 ? 'el premio sorpresa' : 'el grupo de premios sorpresa'}
+          de esta campaña, aunque tengas varias compras.
+          Si sales en uno de esos giros, al agua o ganador, ya no participas en otros premios de ese grupo.
         </p>
       {/if}
     {/if}
@@ -107,7 +139,7 @@
           Elegiste {c.pagados} · recibes <strong>{c.total} números</strong>
           {#if regalo(c)}(incluye {regalo(c)} de regalo 🎁){/if}
         </p>
-        <p class="suave">📅 {c.fecha}</p>
+        <p class="suave">📅 {fechaPublica(c.fecha)}</p>
         {#if c.estado === 'pagado'}
           {#if previa}
             <p class="suave">Dinámica finalizada</p>
@@ -158,7 +190,7 @@
 
     {#each resultados as p, i}
       {@const vig = p.campanas.filter((c) => c.vigente)}
-      {@const ant = p.campanas.filter((c) => !c.vigente).reverse().slice(0, 5)}
+      {@const ant = p.campanas.filter((c) => !c.vigente).sort((a, b) => b.id - a.id).slice(0, 5)}
       <article class="persona">
         <h2>👤 {p.nombre}</h2>
         {#each vig as camp, a}
@@ -186,7 +218,7 @@
   {#if oficial.length}
     <section class="oficial">
       <h2>📋 Registro oficial de dinámicas</h2>
-      {#each oficial as c}
+      {#each oficial as c (c.id)}
         <div class="sorteo">
           <h3 class="camp">📣 {c.campana}</h3>
           {#each c.premios as s}

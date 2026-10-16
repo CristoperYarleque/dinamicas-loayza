@@ -1,5 +1,5 @@
 <script>
-  import { admin } from '#lib/api.js';
+  import { adminGo } from '#lib/api.js';
 
   let { combos, alCambiar } = $props();
 
@@ -15,14 +15,11 @@
     enviando = true;
     msg = '';
     try {
-      const r = await admin('crearCombo', { nombre, pagados, total });
-      msg = r.error ?? '';
-      if (!r.error) {
-        nombre = '';
-        await alCambiar();
-      }
-    } catch {
-      msg = 'Sin conexión. Revisa la lista antes de repetir.';
+      await adminGo('/combos', { method: 'POST', body: { nombre, pagados, total } });
+      nombre = '';
+      await alCambiar();
+    } catch (e) {
+      msg = e.message;
     } finally {
       enviando = false;
     }
@@ -33,9 +30,9 @@
   <label class="campo" for="c-nombre">Nombre del combo</label>
   <input id="c-nombre" bind:value={nombre} placeholder="Ej: Diamante" autocomplete="off" />
   <label class="campo" for="c-pag">Cuántos números paga</label>
-  <input id="c-pag" type="number" min="1" bind:value={pagados} />
+  <input id="c-pag" type="number" min="1" max="500" step="1" bind:value={pagados} />
   <label class="campo" for="c-tot">Cuántos números recibe en total</label>
-  <input id="c-tot" type="number" min="1" bind:value={total} />
+  <input id="c-tot" type="number" min="1" max="500" step="1" bind:value={total} />
   <button class="btn" disabled={enviando || nombre.trim().length < 2}>Agregar combo</button>
   {#if msg}<div class="msg err">{msg}</div>{/if}
 </form>
