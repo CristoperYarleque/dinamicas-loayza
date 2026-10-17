@@ -31,7 +31,7 @@
   let listaEl = $state();
   let carreteEl = $state();
   let sonidoOn = $state(son.sonidoActivo());
-  let autoQuitar = $state(true);
+  let autoQuitar = $state(false);
   let pendiente = $state(null); // Resultado guardado, pendiente de quitar visualmente
   let giroPendiente = $state(null); // Se conserva si se pierde la respuesta
   let confirmado = null;
