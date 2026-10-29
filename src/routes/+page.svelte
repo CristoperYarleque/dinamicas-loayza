@@ -129,7 +129,7 @@
             Si ganas o sales al agua, ya no participarás en los demás premios sorpresa por comprador de esta dinámica.
           </p>
           <p class="premio-principal">
-            🏆 ¡Pero sigues participando por el premio principal con tus numeros adquiridos!.
+            🏆 ¡Pero sigues participando por el premio principal con tus números adquiridos!.
           </p>
         </div>
       {/if}
