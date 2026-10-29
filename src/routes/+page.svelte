@@ -123,12 +123,15 @@
         {previa ? 'Participaste con' : 'Participando con'} <strong>{camp.totalNumeros}</strong> números
       </p>
       {#if !previa && camp.sorpresas > 0}
-        <p class="nota">
-          🎁 Participas una vez como comprador en
-          {camp.sorpresas === 1 ? 'el premio sorpresa' : 'el grupo de premios sorpresa'}
-          de esta campaña, aunque tengas varias compras.
-          Si sales en uno de esos giros, al agua o ganador, ya no participas en otros premios de ese grupo.
-        </p>
+        <div class="nota regla-sorpresas">
+          <p>
+            🎁 Participas con una oportunidad en los premios sorpresa por comprador de esta dinámica.
+            Si ganas o sales al agua, ya no participarás en los demás premios sorpresa por comprador de esta dinámica.
+          </p>
+          <p class="premio-principal">
+            🏆 ¡Pero sigues participando por el premio principal con tus numeros adquiridos!.
+          </p>
+        </div>
       {/if}
     {/if}
     {#each camp.compras as c, j}
@@ -336,4 +339,6 @@
   .bloque.previa .ticket { border: 2px dashed #b7bcb3; background: #f7f8f5; }
   .bloque.previa .chips span { border-color: #b7bcb3; color: var(--suave); }
   .bloque.previa .link { color: var(--suave); }
+  .regla-sorpresas p {margin: 6px 0;}
+  .regla-sorpresas .premio-principal {color: var(--verde-osc); font-weight: 700;}
 </style>
