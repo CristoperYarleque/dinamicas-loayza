@@ -120,7 +120,7 @@
     {#if camp.seguidor}<span class="badge oro">⭐ Anotado en el premio de seguidores</span>{/if}
     {#if camp.totalNumeros > 0}
       <p class="total">
-        {previa ? 'Participaste con' : 'Participando con'} <strong>{camp.totalNumeros}</strong> números
+        {previa ? 'Participaste con' : 'Participando con'} <strong>{camp.totalNumeros}</strong> { camp.totalNumeros > 1 ? 'números' : 'número' }
       </p>
       {#if !previa && camp.sorpresas > 0}
         <div class="nota regla-sorpresas">
@@ -139,7 +139,7 @@
       <div class="ticket" class:pendiente={c.estado === 'pendiente'}>
         <strong>🎟️ {c.combo === 'Individual' ? 'Números sueltos' : 'Combo ' + c.combo}</strong>
         <p>
-          Elegiste {c.pagados} · recibes <strong>{c.total} números</strong>
+          Elegiste {c.pagados} · recibes <strong>{c.total} { c.total > 1 ? 'números' : 'número' }</strong>
           {#if regalo(c)}(incluye {regalo(c)} de regalo 🎁){/if}
         </p>
         <p class="suave">📅 {fechaPublica(c.fecha)}</p>
