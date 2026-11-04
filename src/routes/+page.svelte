@@ -67,6 +67,25 @@
   const numeros = (c) => Array.from({ length: Math.min(c.total, 60) }, (_, k) => c.desde + k);
   const regalo = (c) => Math.max(0, c.total - c.pagados);
   const alternar = (k) => (abiertos[k] = !abiertos[k]);
+  const NOMBRES_GRUPO = {
+    NUMEROS: ['Premio principal', 'Premios principales'],
+    PERSONAS: ['Premio para compradores', 'Premios para compradores'],
+    SEGUIDORES: ['Premio para seguidores', 'Premios para seguidores']
+  };
+  // Agrupa los premios por tipo, en el orden de TIPOS
+  function gruposPremios(premios) {
+    const mapa = new Map();
+    for (const pr of [...premios].sort((a, b) => tipoDe(a.tipo).orden - tipoDe(b.tipo).orden)) {
+      if (!mapa.has(pr.tipo)) {
+        const [singular, plural] = NOMBRES_GRUPO[pr.tipo] ?? ['Premio', 'Premios'];
+        mapa.set(pr.tipo, { singular, plural, premios: [] });
+      }
+      mapa.get(pr.tipo).premios.push(pr);
+    }
+    return [...mapa.values()];
+  }
+  // Solo un panel abierto por ticket: números o premios
+  const mostrar = (k, que) => (abiertos[k] = abiertos[k] === que ? null : que);
 
   const TIPOS = {
     NUMEROS: { etiqueta: '🎯 Premio principal', orden: 1 },
@@ -150,14 +169,33 @@
             <p class="ok">✅ Verificado y listo para la dinámica</p>
           {/if}
           <p>Números: <strong>#{c.desde}</strong> al <strong>#{c.hasta}</strong></p>
-          <button class="link" onclick={() => alternar(k)}>
-            {abiertos[k] ? 'Ocultar números' : 'Ver mis números'}
-          </button>
-          {#if abiertos[k]}
+          <div class="acciones">
+            <button class="link" onclick={() => mostrar(k, 'num')}>
+              {abiertos[k] === 'num' ? 'Ocultar números' : 'Ver mis números'}
+            </button>
+            {#if !previa && camp.premios?.length}
+              <button class="link" onclick={() => mostrar(k, 'pr')}>
+                {abiertos[k] === 'pr' ? 'Ocultar premios' : 'Ver premios en juego'}
+              </button>
+            {/if}
+          </div>
+          {#if abiertos[k] === 'num'}
             <div class="chips">
               {#each numeros(c) as n}<span>{n}</span>{/each}
               {#if c.total > 60}<span>…</span>{/if}
             </div>
+          {:else if abiertos[k] === 'pr'}
+            {@const grupos = gruposPremios(camp.premios)}
+            {#each grupos as g}
+              {#if grupos.length > 1}
+                <p class="premiosTit">{g.premios.length > 1 ? g.plural : g.singular}</p>
+              {/if}
+              <ol class="premios">
+                {#each g.premios as pr, n}
+                  <li><span class="puesto">{n + 1}.º premio</span> {pr.premio}</li>
+                {/each}
+              </ol>
+            {/each}
           {/if}
         {:else}
           <p class="pend">⏳ Pago pendiente de confirmar</p>
@@ -339,6 +377,11 @@
   .bloque.previa .ticket { border: 2px dashed #b7bcb3; background: #f7f8f5; }
   .bloque.previa .chips span { border-color: #b7bcb3; color: var(--suave); }
   .bloque.previa .link { color: var(--suave); }
+  .acciones { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .premios { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+  .premios li { font-size: 0.95rem; }
+  .puesto { display: inline-block; min-width: 88px; font-weight: 700; color: var(--verde-osc); }
+  .premiosTit { margin: 10px 0 0; font-weight: 700; font-size: 0.9rem; }
   .regla-sorpresas p {margin: 6px 0;}
   .regla-sorpresas .premio-principal {color: var(--verde-osc); font-weight: 700;}
 </style>
