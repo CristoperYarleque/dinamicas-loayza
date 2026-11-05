@@ -380,7 +380,7 @@
   .acciones { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   .premios { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
   .premios li { font-size: 0.95rem; }
-  .puesto { display: inline-block; min-width: 32px; font-weight: 700; color: var(--verde-osc); }
+  .puesto { display: inline-block; min-width: 16px; font-weight: 700; color: var(--verde-osc); }
   .premiosTit { margin: 10px 0 0; font-weight: 700; font-size: 0.9rem; }
   .regla-sorpresas p {margin: 6px 0;}
   .regla-sorpresas .premio-principal {color: var(--verde-osc); font-weight: 700;}
