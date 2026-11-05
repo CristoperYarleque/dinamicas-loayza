@@ -192,7 +192,7 @@
               {/if}
               <ol class="premios">
                 {#each g.premios as pr, n}
-                  <li><span class="puesto">{n + 1}.º premio</span> {pr.premio}</li>
+                  <li><span class="puesto">{n + 1}.º</span> {pr.premio}</li>
                 {/each}
               </ol>
             {/each}
